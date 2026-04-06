@@ -28,8 +28,8 @@ const getPrevYearMonth = (year, month) =>
   month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 
 function Variation({ current, prev }) {
-  if (prev === undefined || prev === null) return null
-  if (current === undefined || current === null) return null
+  if (!prev || prev <= 0) return null
+  if (!current || current <= 0) return null
 
   const diff = current - prev
 
