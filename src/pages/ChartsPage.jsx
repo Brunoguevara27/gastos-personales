@@ -24,10 +24,6 @@ const fmtFull = (n) =>
     maximumFractionDigits: 0,
   }).format(n || 0)
 
-const PALETTE = [
-  '#6366f1', '#f97316', '#eab308', '#3b82f6', '#8b5cf6',
-  '#06b6d4', '#10b981', '#ef4444', '#ec4899', '#84cc16',
-]
 
 export default function ChartsPage() {
   const { user } = useAuth()
@@ -91,7 +87,7 @@ export default function ChartsPage() {
   const pieData = categories
     .map((cat, i) => {
       const exp = allExpenses.find(e => e.year === ly && e.month === lm && e.category_id === cat.id)
-      return { name: cat.name, value: exp ? parseFloat(exp.amount) : 0, color: PALETTE[i % PALETTE.length] }
+      return { name: cat.name, value: exp ? parseFloat(exp.amount) : 0, color: cat.color }
     })
     .filter(d => d.value > 0)
 
@@ -172,8 +168,8 @@ export default function ChartsPage() {
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              {categories.map((cat, i) => (
-                <Bar key={cat.id} dataKey={cat.name} stackId="a" fill={PALETTE[i % PALETTE.length]} />
+              {categories.map(cat => (
+                <Bar key={cat.id} dataKey={cat.name} stackId="a" fill={cat.color} />
               ))}
             </BarChart>
           </ResponsiveContainer>
