@@ -78,7 +78,9 @@ export default function HistoryPage() {
         {monthKeys.map(key => {
           const [y, m] = key.split('-').map(Number)
           const total = getTotal(y, m)
-          const catWithAmount = categories.filter(cat => getAmount(y, m, cat.id) !== null)
+          const catWithAmount = categories
+            .filter(cat => getAmount(y, m, cat.id) !== null)
+            .sort((a, b) => (getAmount(y, m, b.id) ?? 0) - (getAmount(y, m, a.id) ?? 0))
           return (
             <div key={key} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -111,7 +113,13 @@ export default function HistoryPage() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-4 py-3 font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[110px]">Mes</th>
-              {categories.map(cat => (
+              {[...categories]
+                .sort((a, b) => {
+                  const aTotal = allExpenses.filter(e => e.category_id === a.id).reduce((s, e) => s + parseFloat(e.amount || 0), 0)
+                  const bTotal = allExpenses.filter(e => e.category_id === b.id).reduce((s, e) => s + parseFloat(e.amount || 0), 0)
+                  return bTotal - aTotal
+                })
+                .map(cat => (
                 <th key={cat.id} className="text-right px-4 py-3 font-semibold text-gray-500 min-w-[120px]">
                   <div className="flex items-center justify-end gap-1.5">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
@@ -131,7 +139,13 @@ export default function HistoryPage() {
                   <td className="px-4 py-3 font-semibold text-gray-700 sticky left-0 bg-inherit">
                     {MONTHS_SHORT[m - 1]} {y}
                   </td>
-                  {categories.map(cat => (
+                  {[...categories]
+                    .sort((a, b) => {
+                      const aTotal = allExpenses.filter(e => e.category_id === a.id).reduce((s, e) => s + parseFloat(e.amount || 0), 0)
+                      const bTotal = allExpenses.filter(e => e.category_id === b.id).reduce((s, e) => s + parseFloat(e.amount || 0), 0)
+                      return bTotal - aTotal
+                    })
+                    .map(cat => (
                     <td key={cat.id} className="px-4 py-3 text-right text-gray-600">
                       {fmt(getAmount(y, m, cat.id))}
                     </td>
