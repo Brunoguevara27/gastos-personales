@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gastos-personales",
+      "runtimeExecutable": "/opt/homebrew/opt/node/bin/node",
+      "env": { "PATH": "/opt/homebrew/opt/node/bin:/usr/bin:/bin" },
+      "runtimeArgs": ["/opt/homebrew/opt/node/bin/npm", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}
