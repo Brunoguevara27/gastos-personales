@@ -210,7 +210,13 @@ export default function DashboardPage() {
         <p className="text-center text-gray-400 py-8">No tenés categorías. Creá una en la sección Categorías.</p>
       ) : (
         <div className="space-y-2.5">
-          {categories.map(cat => {
+          {[...categories]
+            .sort((a, b) => {
+              const aVal = expenses[a.id] ?? -1
+              const bVal = expenses[b.id] ?? -1
+              return bVal - aVal
+            })
+            .map(cat => {
             const isEditing = editingCatId === cat.id
             const current = expenses[cat.id]
             const prev = prevExpenses[cat.id]

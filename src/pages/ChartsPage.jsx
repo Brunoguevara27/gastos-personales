@@ -203,7 +203,7 @@ export default function ChartsPage() {
           </ResponsiveContainer>
           {/* Custom legend */}
           <div className="mt-3 space-y-2">
-            {pieData.map((entry, i) => {
+            {[...pieData].sort((a, b) => b.value - a.value).map((entry, i) => {
               const total = pieData.reduce((s, d) => s + d.value, 0)
               const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : 0
               return (
