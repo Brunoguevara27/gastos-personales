@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, Pencil, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -24,6 +24,34 @@ const displayValue = (raw) => {
   return isNaN(num) ? '' : num.toLocaleString('es-AR')
 }
 
+const getPrevYearMonth = (year, month) =>
+  month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+
+function Variation({ current, prev }) {
+  if (prev === undefined || prev === null) return null
+  if (current === undefined || current === null) return null
+
+  const diff = current - prev
+
+  if (diff === 0) return (
+    <span className="flex items-center gap-0.5 text-xs text-gray-400">
+      <Minus size={11} /> igual
+    </span>
+  )
+
+  const isUp = diff > 0
+  const absDiff = Math.abs(diff)
+  const pct = Math.round((absDiff / prev) * 100)
+
+  return (
+    <span className={`flex items-center gap-0.5 text-xs font-medium ${isUp ? 'text-red-400' : 'text-green-500'}`}>
+      {isUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+      {isUp ? '+' : '-'}{fmt(absDiff)}
+      <span className="text-gray-300 font-normal">({pct}%)</span>
+    </span>
+  )
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const now = new Date()
@@ -31,8 +59,8 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [categories, setCategories] = useState([])
   const [expenses, setExpenses] = useState({})
+  const [prevExpenses, setPrevExpenses] = useState({})
   const [loading, setLoading] = useState(true)
-  // inline edit state
   const [editingCatId, setEditingCatId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -40,20 +68,29 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [{ data: cats }, { data: exps }] = await Promise.all([
+    const prev = getPrevYearMonth(year, month)
+
+    const [{ data: cats }, { data: exps }, { data: prevExps }] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('expenses').select('*').eq('user_id', user.id).eq('year', year).eq('month', month),
+      supabase.from('expenses').select('*').eq('user_id', user.id).eq('year', prev.year).eq('month', prev.month),
     ])
+
     setCategories(cats || [])
+
     const map = {}
     ;(exps || []).forEach(e => { map[e.category_id] = parseFloat(e.amount) })
     setExpenses(map)
+
+    const prevMap = {}
+    ;(prevExps || []).forEach(e => { prevMap[e.category_id] = parseFloat(e.amount) })
+    setPrevExpenses(prevMap)
+
     setLoading(false)
   }, [user.id, year, month])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // focus input when a row enters edit mode
   useEffect(() => {
     if (editingCatId && inputRef.current) {
       inputRef.current.focus()
@@ -88,7 +125,6 @@ export default function DashboardPage() {
     const digits = editingValue.replace(/\D/g, '')
 
     if (digits === '') {
-      // delete if existed
       if (expenses[catId] !== undefined) {
         await supabase.from('expenses')
           .delete()
@@ -123,6 +159,7 @@ export default function DashboardPage() {
   }
 
   const total = Object.values(expenses).reduce((sum, v) => sum + (v || 0), 0)
+  const prevTotal = Object.values(prevExpenses).reduce((sum, v) => sum + (v || 0), 0)
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-4">
@@ -144,6 +181,25 @@ export default function DashboardPage() {
       <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-6 mb-5 text-white shadow-lg">
         <p className="text-indigo-200 text-sm font-medium">Total del mes</p>
         <p className="text-4xl font-bold mt-1 tracking-tight">{fmt(total)}</p>
+        {prevTotal > 0 && total > 0 && (
+          <div className="mt-2 flex items-center gap-1.5">
+            {total === prevTotal ? (
+              <span className="text-indigo-200 text-xs flex items-center gap-1">
+                <Minus size={11} /> igual al mes anterior
+              </span>
+            ) : total > prevTotal ? (
+              <span className="text-red-300 text-xs flex items-center gap-1">
+                <TrendingUp size={11} />
+                +{fmt(total - prevTotal)} vs mes anterior
+              </span>
+            ) : (
+              <span className="text-green-300 text-xs flex items-center gap-1">
+                <TrendingDown size={11} />
+                -{fmt(prevTotal - total)} vs mes anterior
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -156,6 +212,9 @@ export default function DashboardPage() {
         <div className="space-y-2.5">
           {categories.map(cat => {
             const isEditing = editingCatId === cat.id
+            const current = expenses[cat.id]
+            const prev = prevExpenses[cat.id]
+
             return (
               <div
                 key={cat.id}
@@ -164,7 +223,6 @@ export default function DashboardPage() {
                 }`}
               >
                 {isEditing ? (
-                  /* Edit state */
                   <div className="flex items-center gap-2 px-4 py-3">
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                     <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
@@ -193,18 +251,25 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 ) : (
-                  /* Display state — tap anywhere to edit */
                   <button
                     onClick={() => startInlineEdit(cat)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 text-left active:bg-gray-50"
+                    className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-gray-50"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                       <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
                     </div>
-                    <span className={`font-semibold text-sm ${expenses[cat.id] ? 'text-gray-900' : 'text-gray-300'}`}>
-                      {expenses[cat.id] ? fmt(expenses[cat.id]) : 'Tocar para agregar'}
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      {current ? (
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                          {fmt(current)}
+                          <Pencil size={12} className="text-gray-300" />
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-300">Tocar para agregar</span>
+                      )}
+                      <Variation current={current} prev={prev} />
+                    </div>
                   </button>
                 )}
               </div>
