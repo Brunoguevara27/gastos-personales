@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, ChevronRight, Edit2, Save, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react'
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -18,6 +18,12 @@ const fmt = (n) => {
   }).format(n)
 }
 
+const displayValue = (raw) => {
+  if (!raw) return ''
+  const num = parseInt(raw, 10)
+  return isNaN(num) ? '' : num.toLocaleString('es-AR')
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const now = new Date()
@@ -25,10 +31,12 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [categories, setCategories] = useState([])
   const [expenses, setExpenses] = useState({})
-  const [editing, setEditing] = useState(false)
-  const [editValues, setEditValues] = useState({})
   const [loading, setLoading] = useState(true)
+  // inline edit state
+  const [editingCatId, setEditingCatId] = useState(null)
+  const [editingValue, setEditingValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const inputRef = useRef(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -45,82 +53,73 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // focus input when a row enters edit mode
+  useEffect(() => {
+    if (editingCatId && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [editingCatId])
+
   const prevMonth = () => {
+    setEditingCatId(null)
     if (month === 1) { setMonth(12); setYear(y => y - 1) }
     else setMonth(m => m - 1)
   }
   const nextMonth = () => {
+    setEditingCatId(null)
     if (month === 12) { setMonth(1); setYear(y => y + 1) }
     else setMonth(m => m + 1)
   }
 
-  const startEdit = () => {
-    const initial = {}
-    categories.forEach(c => {
-      initial[c.id] = expenses[c.id] !== undefined ? String(Math.round(expenses[c.id])) : ''
-    })
-    setEditValues(initial)
-    setEditing(true)
+  const startInlineEdit = (cat) => {
+    if (saving) return
+    setEditingCatId(cat.id)
+    setEditingValue(expenses[cat.id] !== undefined ? String(Math.round(expenses[cat.id])) : '')
   }
 
-  const handleInputChange = (catId, raw) => {
-    const digits = raw.replace(/\D/g, '')
-    setEditValues(v => ({ ...v, [catId]: digits }))
+  const cancelInlineEdit = () => {
+    setEditingCatId(null)
+    setEditingValue('')
   }
 
-  const displayValue = (raw) => {
-    if (!raw) return ''
-    const num = parseInt(raw, 10)
-    return isNaN(num) ? '' : num.toLocaleString('es-AR')
-  }
-
-  const cancelEdit = () => {
-    setEditing(false)
-    setEditValues({})
-  }
-
-  const saveExpenses = async () => {
+  const saveInlineEdit = async (catId) => {
     setSaving(true)
+    const digits = editingValue.replace(/\D/g, '')
 
-    const toUpsert = []
-    const toDelete = []
-
-    categories.forEach(cat => {
-      const raw = editValues[cat.id]
-      if (raw === '' || raw === undefined) {
-        if (expenses[cat.id] !== undefined) toDelete.push(cat.id)
-      } else {
-        const amount = parseFloat(raw)
-        if (!isNaN(amount)) {
-          toUpsert.push({
-            user_id: user.id,
-            year,
-            month,
-            category_id: cat.id,
-            amount,
-            updated_at: new Date().toISOString(),
-          })
-        }
-      }
-    })
-
-    await Promise.all([
-      toUpsert.length > 0
-        ? supabase.from('expenses').upsert(toUpsert, { onConflict: 'user_id,year,month,category_id' })
-        : Promise.resolve(),
-      ...toDelete.map(catId =>
-        supabase.from('expenses')
+    if (digits === '') {
+      // delete if existed
+      if (expenses[catId] !== undefined) {
+        await supabase.from('expenses')
           .delete()
           .eq('user_id', user.id)
           .eq('year', year)
           .eq('month', month)
           .eq('category_id', catId)
-      ),
-    ])
+      }
+    } else {
+      await supabase.from('expenses').upsert(
+        [{
+          user_id: user.id,
+          year,
+          month,
+          category_id: catId,
+          amount: parseFloat(digits),
+          updated_at: new Date().toISOString(),
+        }],
+        { onConflict: 'user_id,year,month,category_id' }
+      )
+    }
 
     setSaving(false)
-    setEditing(false)
+    setEditingCatId(null)
+    setEditingValue('')
     fetchData()
+  }
+
+  const handleKeyDown = (e, catId) => {
+    if (e.key === 'Enter') saveInlineEdit(catId)
+    if (e.key === 'Escape') cancelInlineEdit()
   }
 
   const total = Object.values(expenses).reduce((sum, v) => sum + (v || 0), 0)
@@ -129,20 +128,14 @@ export default function DashboardPage() {
     <div className="max-w-lg mx-auto px-4 pt-4">
       {/* Month navigator */}
       <div className="flex items-center justify-between mb-5">
-        <button
-          onClick={prevMonth}
-          className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600"
-        >
+        <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
           <ChevronLeft size={22} />
         </button>
         <div className="text-center">
           <p className="text-xl font-bold text-gray-900">{MONTHS[month - 1]}</p>
           <p className="text-sm text-gray-400">{year}</p>
         </div>
-        <button
-          onClick={nextMonth}
-          className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600"
-        >
+        <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
           <ChevronRight size={22} />
         </button>
       </div>
@@ -160,60 +153,64 @@ export default function DashboardPage() {
       ) : categories.length === 0 ? (
         <p className="text-center text-gray-400 py-8">No tenés categorías. Creá una en la sección Categorías.</p>
       ) : (
-        <>
-          <div className="space-y-2.5 mb-6">
-            {categories.map(cat => (
+        <div className="space-y-2.5">
+          {categories.map(cat => {
+            const isEditing = editingCatId === cat.id
+            return (
               <div
                 key={cat.id}
-                className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100 flex items-center justify-between"
+                className={`bg-white rounded-xl shadow-sm border transition-all ${
+                  isEditing ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-gray-100'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
-                </div>
-                {editing ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={displayValue(editValues[cat.id])}
-                    onChange={e => handleInputChange(cat.id, e.target.value)}
-                    placeholder="0"
-                    className="w-36 text-right px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                  />
+                {isEditing ? (
+                  /* Edit state */
+                  <div className="flex items-center gap-2 px-4 py-3">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                    <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      inputMode="numeric"
+                      value={displayValue(editingValue)}
+                      onChange={e => setEditingValue(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={e => handleKeyDown(e, cat.id)}
+                      placeholder="0"
+                      className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                    <button
+                      onClick={() => saveInlineEdit(cat.id)}
+                      disabled={saving}
+                      className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Check size={15} />
+                    </button>
+                    <button
+                      onClick={cancelInlineEdit}
+                      className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
                 ) : (
-                  <span className={`font-semibold text-sm ${expenses[cat.id] ? 'text-gray-900' : 'text-gray-300'}`}>
-                    {expenses[cat.id] ? fmt(expenses[cat.id]) : '-'}
-                  </span>
+                  /* Display state — tap anywhere to edit */
+                  <button
+                    onClick={() => startInlineEdit(cat)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 text-left active:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                    </div>
+                    <span className={`font-semibold text-sm ${expenses[cat.id] ? 'text-gray-900' : 'text-gray-300'}`}>
+                      {expenses[cat.id] ? fmt(expenses[cat.id]) : 'Tocar para agregar'}
+                    </span>
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-
-          {editing ? (
-            <div className="flex gap-3">
-              <button
-                onClick={cancelEdit}
-                className="flex-1 flex items-center justify-center gap-2 py-3 border border-gray-300 rounded-xl font-medium text-gray-600 hover:bg-gray-50 text-sm transition-colors"
-              >
-                <X size={17} /> Cancelar
-              </button>
-              <button
-                onClick={saveExpenses}
-                disabled={saving}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 text-sm transition-colors"
-              >
-                <Save size={17} /> {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={startEdit}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 text-sm transition-colors shadow-sm"
-            >
-              <Edit2 size={17} /> Editar gastos
-            </button>
-          )}
-        </>
+            )
+          })}
+        </div>
       )}
     </div>
   )

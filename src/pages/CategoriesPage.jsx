@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, Trash2, Lock } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -9,13 +9,67 @@ const PRESET_COLORS = [
   '#10b981', '#6366f1',
 ]
 
+function CategoryForm({ title, initialName = '', initialColor = '#6366f1', saving, error, onSave, onCancel }) {
+  const [name, setName] = useState(initialName)
+  const [color, setColor] = useState(initialColor)
+  const inputRef = useRef(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-200 mb-4">
+      <h3 className="font-semibold text-gray-700 mb-4 text-sm">{title}</h3>
+      <div className="space-y-4">
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onSave(name, color)}
+          placeholder="Nombre (ej: Teléfono)"
+          className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          maxLength={30}
+        />
+        <div>
+          <p className="text-xs text-gray-500 mb-2">Color</p>
+          <div className="flex flex-wrap gap-2.5">
+            {PRESET_COLORS.map(c => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-full transition-all ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-110'}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+        {error && <p className="text-red-600 text-xs">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSave(name, color)}
+            disabled={saving || !name.trim()}
+            className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CategoriesPage() {
   const { user } = useAuth()
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState('#6366f1')
+  const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(null)
@@ -32,23 +86,38 @@ export default function CategoriesPage() {
 
   useEffect(() => { fetchCategories() }, [user.id])
 
-  const addCategory = async () => {
-    if (!newName.trim()) return
+  const addCategory = async (name, color) => {
+    if (!name.trim()) return
     setSaving(true)
     setError('')
     const { error } = await supabase.from('categories').insert({
       user_id: user.id,
-      name: newName.trim(),
-      color: newColor,
+      name: name.trim(),
+      color,
       is_default: false,
     })
     setSaving(false)
     if (error) {
       setError('No se pudo guardar la categoría.')
     } else {
-      setNewName('')
-      setNewColor('#6366f1')
       setAdding(false)
+      fetchCategories()
+    }
+  }
+
+  const editCategory = async (name, color) => {
+    if (!name.trim()) return
+    setSaving(true)
+    setError('')
+    const { error } = await supabase
+      .from('categories')
+      .update({ name: name.trim(), color })
+      .eq('id', editingId)
+    setSaving(false)
+    if (error) {
+      setError('No se pudo guardar.')
+    } else {
+      setEditingId(null)
       fetchCategories()
     }
   }
@@ -61,6 +130,17 @@ export default function CategoriesPage() {
     fetchCategories()
   }
 
+  const startEdit = (cat) => {
+    setAdding(false)
+    setError('')
+    setEditingId(cat.id)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setError('')
+  }
+
   if (loading) return (
     <div className="flex justify-center py-12">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
@@ -71,7 +151,7 @@ export default function CategoriesPage() {
     <div className="max-w-lg mx-auto px-4 pt-4">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-bold text-gray-900">Categorías</h2>
-        {!adding && (
+        {!adding && !editingId && (
           <button
             onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -81,78 +161,51 @@ export default function CategoriesPage() {
         )}
       </div>
 
-      {/* Add form */}
       {adding && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 mb-4">
-          <h3 className="font-semibold text-gray-700 mb-4 text-sm">Nueva categoría</h3>
-          <div className="space-y-4">
-            <input
-              type="text"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addCategory()}
-              placeholder="Nombre (ej: Teléfono)"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              autoFocus
-              maxLength={30}
-            />
-            <div>
-              <p className="text-xs text-gray-500 mb-2">Color</p>
-              <div className="flex flex-wrap gap-2.5">
-                {PRESET_COLORS.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setNewColor(color)}
-                    className={`w-8 h-8 rounded-full transition-all ${newColor === color ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-110'}`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </div>
-            {error && <p className="text-red-600 text-xs">{error}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setAdding(false); setNewName(''); setError('') }}
-                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={addCategory}
-                disabled={saving || !newName.trim()}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CategoryForm
+          title="Nueva categoría"
+          saving={saving}
+          error={error}
+          onSave={addCategory}
+          onCancel={() => { setAdding(false); setError('') }}
+        />
       )}
 
-      {/* List */}
       <div className="space-y-2">
         {categories.map(cat => (
-          <div
-            key={cat.id}
-            className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-              <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
-              {cat.is_default && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Default</span>
-              )}
-            </div>
-            {cat.is_default ? (
-              <Lock size={15} className="text-gray-300" />
+          <div key={cat.id}>
+            {editingId === cat.id ? (
+              <CategoryForm
+                title={`Editar — ${cat.name}`}
+                initialName={cat.name}
+                initialColor={cat.color}
+                saving={saving}
+                error={error}
+                onSave={editCategory}
+                onCancel={cancelEdit}
+              />
             ) : (
-              <button
-                onClick={() => deleteCategory(cat)}
-                disabled={deleting === cat.id}
-                className="text-red-300 hover:text-red-500 p-1 transition-colors disabled:opacity-50"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => startEdit(cat)}
+                    className="p-1.5 text-gray-400 hover:text-indigo-500 transition-colors"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => deleteCategory(cat)}
+                    disabled={deleting === cat.id}
+                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ))}
