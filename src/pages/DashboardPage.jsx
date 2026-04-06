@@ -41,13 +41,13 @@ function Variation({ current, prev }) {
 
   const isUp = diff > 0
   const absDiff = Math.abs(diff)
-  const pct = Math.round((absDiff / prev) * 100)
+  const pct = prev > 0 ? Math.round((absDiff / prev) * 100) : null
 
   return (
     <span className={`flex items-center gap-0.5 text-xs font-medium ${isUp ? 'text-red-400' : 'text-green-500'}`}>
       {isUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
       {isUp ? '+' : '-'}{fmt(absDiff)}
-      <span className="text-gray-300 font-normal">({pct}%)</span>
+      {pct !== null && <span className="text-gray-300 font-normal">({pct}%)</span>}
     </span>
   )
 }
@@ -124,7 +124,7 @@ export default function DashboardPage() {
     setSaving(true)
     const digits = editingValue.replace(/\D/g, '')
 
-    if (digits === '') {
+    if (digits === '' || parseInt(digits, 10) === 0) {
       if (expenses[catId] !== undefined) {
         await supabase.from('expenses')
           .delete()
