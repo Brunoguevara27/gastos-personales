@@ -6,6 +6,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Prevent iOS Safari auto-zoom on input focus */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
 body {
   @apply bg-gray-50;
 }
