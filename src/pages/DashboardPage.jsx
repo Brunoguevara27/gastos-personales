@@ -57,10 +57,21 @@ export default function DashboardPage() {
   const startEdit = () => {
     const initial = {}
     categories.forEach(c => {
-      initial[c.id] = expenses[c.id] !== undefined ? String(expenses[c.id]) : ''
+      initial[c.id] = expenses[c.id] !== undefined ? String(Math.round(expenses[c.id])) : ''
     })
     setEditValues(initial)
     setEditing(true)
+  }
+
+  const handleInputChange = (catId, raw) => {
+    const digits = raw.replace(/\D/g, '')
+    setEditValues(v => ({ ...v, [catId]: digits }))
+  }
+
+  const displayValue = (raw) => {
+    if (!raw) return ''
+    const num = parseInt(raw, 10)
+    return isNaN(num) ? '' : num.toLocaleString('es-AR')
   }
 
   const cancelEdit = () => {
@@ -162,9 +173,10 @@ export default function DashboardPage() {
                 </div>
                 {editing ? (
                   <input
-                    type="number"
-                    value={editValues[cat.id] ?? ''}
-                    onChange={e => setEditValues(v => ({ ...v, [cat.id]: e.target.value }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={displayValue(editValues[cat.id])}
+                    onChange={e => handleInputChange(cat.id, e.target.value)}
                     placeholder="0"
                     className="w-36 text-right px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                   />

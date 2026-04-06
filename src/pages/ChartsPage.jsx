@@ -186,16 +186,14 @@ export default function ChartsPage() {
           <h3 className="font-semibold text-gray-700 mb-1 text-sm">
             Distribución — {MONTHS_SHORT[lm - 1]} {ly}
           </h3>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
                 cy="50%"
-                outerRadius={95}
+                outerRadius={85}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                labelLine
               >
                 {pieData.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
@@ -207,6 +205,25 @@ export default function ChartsPage() {
               />
             </PieChart>
           </ResponsiveContainer>
+          {/* Custom legend */}
+          <div className="mt-3 space-y-2">
+            {pieData.map((entry, i) => {
+              const total = pieData.reduce((s, d) => s + d.value, 0)
+              const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : 0
+              return (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                    <span className="text-gray-600">{entry.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-800 font-medium">{fmtFull(entry.value)}</span>
+                    <span className="text-gray-400 text-xs w-8 text-right">{pct}%</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
