@@ -112,6 +112,53 @@ export default function ChartsPage() {
         </div>
       </div>
 
+      {/* Pie chart: last month breakdown */}
+      {pieData.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <h3 className="font-semibold text-gray-700 mb-1 text-sm">
+            Distribución — {MONTHS_SHORT[lm - 1]} {ly}
+          </h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                outerRadius={85}
+                dataKey="value"
+              >
+                {pieData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v, name) => [fmtFull(v), name]}
+                contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: 12 }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          {/* Custom legend */}
+          <div className="mt-3 space-y-2">
+            {[...pieData].sort((a, b) => b.value - a.value).map((entry, i) => {
+              const total = pieData.reduce((s, d) => s + d.value, 0)
+              const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : 0
+              return (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                    <span className="text-gray-600">{entry.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-800 font-medium">{fmtFull(entry.value)}</span>
+                    <span className="text-gray-400 text-xs w-8 text-right">{pct}%</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Line chart: total evolution */}
       {lineData.length >= 2 && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -165,53 +212,6 @@ export default function ChartsPage() {
               ))}
             </BarChart>
           </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Pie chart: last month breakdown */}
-      {pieData.length > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <h3 className="font-semibold text-gray-700 mb-1 text-sm">
-            Distribución — {MONTHS_SHORT[lm - 1]} {ly}
-          </h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                outerRadius={85}
-                dataKey="value"
-              >
-                {pieData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(v, name) => [fmtFull(v), name]}
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: 12 }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          {/* Custom legend */}
-          <div className="mt-3 space-y-2">
-            {[...pieData].sort((a, b) => b.value - a.value).map((entry, i) => {
-              const total = pieData.reduce((s, d) => s + d.value, 0)
-              const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : 0
-              return (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                    <span className="text-gray-600">{entry.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-800 font-medium">{fmtFull(entry.value)}</span>
-                    <span className="text-gray-400 text-xs w-8 text-right">{pct}%</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
         </div>
       )}
     </div>
