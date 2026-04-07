@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, ChevronRight, Check, X, Pencil, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, TrendingUp, TrendingDown, Minus, Plus } from 'lucide-react'
+import { DashboardSkeleton } from '../components/Skeleton'
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -64,10 +65,13 @@ export default function DashboardPage() {
   const [editingCatId, setEditingCatId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedCatId, setSavedCatId] = useState(null)
+  const [visible, setVisible] = useState(true)
   const inputRef = useRef(null)
+  const touchStartX = useRef(null)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (opts = {}) => {
+    if (!opts.silent) setLoading(true)
     const prev = getPrevYearMonth(year, month)
 
     const [{ data: cats }, { data: exps }, { data: prevExps }] = await Promise.all([
@@ -86,7 +90,10 @@ export default function DashboardPage() {
     ;(prevExps || []).forEach(e => { prevMap[e.category_id] = parseFloat(e.amount) })
     setPrevExpenses(prevMap)
 
-    setLoading(false)
+    if (!opts.silent) {
+      setLoading(false)
+      setTimeout(() => setVisible(true), 10)
+    }
   }, [user.id, year, month])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -98,15 +105,30 @@ export default function DashboardPage() {
     }
   }, [editingCatId])
 
-  const prevMonth = () => {
+  const changeMonth = (dir) => {
     setEditingCatId(null)
-    if (month === 1) { setMonth(12); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
+    setVisible(false)
+    setTimeout(() => {
+      if (dir === 'prev') {
+        if (month === 1) { setMonth(12); setYear(y => y - 1) }
+        else setMonth(m => m - 1)
+      } else {
+        if (month === 12) { setMonth(1); setYear(y => y + 1) }
+        else setMonth(m => m + 1)
+      }
+    }, 120)
   }
-  const nextMonth = () => {
-    setEditingCatId(null)
-    if (month === 12) { setMonth(1); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
+
+  // Touch swipe handlers
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX
+  }
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+    if (Math.abs(dx) < 50) return // too short
+    changeMonth(dx < 0 ? 'next' : 'prev')
   }
 
   const startInlineEdit = (cat) => {
@@ -123,8 +145,24 @@ export default function DashboardPage() {
   const saveInlineEdit = async (catId) => {
     setSaving(true)
     const digits = editingValue.replace(/\D/g, '')
+    const newAmount = digits === '' || parseInt(digits, 10) === 0 ? null : parseFloat(digits)
 
-    if (digits === '' || parseInt(digits, 10) === 0) {
+    // Optimistic update
+    setEditingCatId(null)
+    setEditingValue('')
+    setExpenses(prev => {
+      const next = { ...prev }
+      if (newAmount === null) delete next[catId]
+      else next[catId] = newAmount
+      return next
+    })
+
+    // Flash green feedback
+    setSavedCatId(catId)
+    setTimeout(() => setSavedCatId(null), 1000)
+
+    // Persist to DB
+    if (newAmount === null) {
       if (expenses[catId] !== undefined) {
         await supabase.from('expenses')
           .delete()
@@ -140,7 +178,7 @@ export default function DashboardPage() {
           year,
           month,
           category_id: catId,
-          amount: parseFloat(digits),
+          amount: newAmount,
           updated_at: new Date().toISOString(),
         }],
         { onConflict: 'user_id,year,month,category_id' }
@@ -148,9 +186,8 @@ export default function DashboardPage() {
     }
 
     setSaving(false)
-    setEditingCatId(null)
-    setEditingValue('')
-    fetchData()
+    // Silent background refresh to sync
+    fetchData({ silent: true })
   }
 
   const handleKeyDown = (e, catId) => {
@@ -160,129 +197,151 @@ export default function DashboardPage() {
 
   const total = Object.values(expenses).reduce((sum, v) => sum + (v || 0), 0)
   const prevTotal = Object.values(prevExpenses).reduce((sum, v) => sum + (v || 0), 0)
+  const hasData = total > 0
+
+  if (loading) return <DashboardSkeleton />
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-4">
+    <div
+      className="max-w-lg mx-auto px-4 pt-4"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Month navigator */}
       <div className="flex items-center justify-between mb-5">
-        <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
+        <button onClick={() => changeMonth('prev')} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
           <ChevronLeft size={22} />
         </button>
         <div className="text-center">
           <p className="text-xl font-bold text-gray-900">{MONTHS[month - 1]}</p>
           <p className="text-sm text-gray-400">{year}</p>
         </div>
-        <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
+        <button onClick={() => changeMonth('next')} className="p-2 rounded-xl hover:bg-gray-200 transition-colors text-gray-600">
           <ChevronRight size={22} />
         </button>
       </div>
 
-      {/* Total card */}
-      <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-6 mb-5 text-white shadow-lg">
-        <p className="text-indigo-200 text-sm font-medium">Total del mes</p>
-        <p className="text-4xl font-bold mt-1 tracking-tight">{fmt(total)}</p>
-        {prevTotal > 0 && total > 0 && (
-          <div className="mt-2 flex items-center gap-1.5">
-            {total === prevTotal ? (
-              <span className="text-indigo-200 text-xs flex items-center gap-1">
-                <Minus size={11} /> igual al mes anterior
-              </span>
-            ) : total > prevTotal ? (
-              <span className="text-red-300 text-xs flex items-center gap-1">
-                <TrendingUp size={11} />
-                +{fmt(total - prevTotal)} vs mes anterior
-              </span>
-            ) : (
-              <span className="text-green-300 text-xs flex items-center gap-1">
-                <TrendingDown size={11} />
-                -{fmt(prevTotal - total)} vs mes anterior
-              </span>
+      {/* Content with fade transition */}
+      <div
+        className="transition-opacity duration-150"
+        style={{ opacity: visible ? 1 : 0 }}
+      >
+        {/* Total card */}
+        {hasData ? (
+          <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-6 mb-5 text-white shadow-lg">
+            <p className="text-indigo-200 text-sm font-medium">Total del mes</p>
+            <p className="text-4xl font-bold mt-1 tracking-tight">{fmt(total)}</p>
+            {prevTotal > 0 && (
+              <div className="mt-2 flex items-center gap-1.5">
+                {total === prevTotal ? (
+                  <span className="text-indigo-200 text-xs flex items-center gap-1">
+                    <Minus size={11} /> igual al mes anterior
+                  </span>
+                ) : total > prevTotal ? (
+                  <span className="text-red-300 text-xs flex items-center gap-1">
+                    <TrendingUp size={11} />
+                    +{fmt(total - prevTotal)} vs mes anterior
+                  </span>
+                ) : (
+                  <span className="text-green-300 text-xs flex items-center gap-1">
+                    <TrendingDown size={11} />
+                    -{fmt(prevTotal - total)} vs mes anterior
+                  </span>
+                )}
+              </div>
             )}
+          </div>
+        ) : (
+          <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 mb-5 text-center">
+            <p className="text-gray-400 text-sm">Sin gastos registrados</p>
+            <p className="text-gray-300 text-xs mt-1">Tocá una categoría para agregar</p>
+          </div>
+        )}
+
+        {categories.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">No tenés categorías. Creá una en la sección Categorías.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {[...categories]
+              .sort((a, b) => {
+                const aVal = expenses[a.id] ?? -1
+                const bVal = expenses[b.id] ?? -1
+                return bVal - aVal
+              })
+              .map(cat => {
+              const isEditing = editingCatId === cat.id
+              const current = expenses[cat.id]
+              const prev = prevExpenses[cat.id]
+              const justSaved = savedCatId === cat.id
+
+              return (
+                <div
+                  key={cat.id}
+                  className={`bg-white rounded-xl shadow-sm border transition-all duration-300 ${
+                    justSaved
+                      ? 'border-green-300 ring-1 ring-green-200 bg-green-50'
+                      : isEditing
+                      ? 'border-indigo-300 ring-1 ring-indigo-200'
+                      : 'border-gray-100'
+                  }`}
+                >
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 px-4 py-3">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={displayValue(editingValue)}
+                        onChange={e => setEditingValue(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={e => handleKeyDown(e, cat.id)}
+                        placeholder="0"
+                        className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                      />
+                      <button
+                        onClick={() => saveInlineEdit(cat.id)}
+                        disabled={saving}
+                        className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Check size={15} />
+                      </button>
+                      <button
+                        onClick={cancelInlineEdit}
+                        className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startInlineEdit(cat)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                        <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                      </div>
+                      <div className="flex flex-col items-end gap-0.5">
+                        {current ? (
+                          <span className={`text-sm font-semibold transition-colors duration-300 ${justSaved ? 'text-green-600' : 'text-gray-900'}`}>
+                            {fmt(current)}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-gray-300 border border-dashed border-gray-200 rounded-lg px-2 py-0.5">
+                            <Plus size={10} /> agregar
+                          </span>
+                        )}
+                        <Variation current={current} prev={prev} />
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-        </div>
-      ) : categories.length === 0 ? (
-        <p className="text-center text-gray-400 py-8">No tenés categorías. Creá una en la sección Categorías.</p>
-      ) : (
-        <div className="space-y-2.5">
-          {[...categories]
-            .sort((a, b) => {
-              const aVal = expenses[a.id] ?? -1
-              const bVal = expenses[b.id] ?? -1
-              return bVal - aVal
-            })
-            .map(cat => {
-            const isEditing = editingCatId === cat.id
-            const current = expenses[cat.id]
-            const prev = prevExpenses[cat.id]
-
-            return (
-              <div
-                key={cat.id}
-                className={`bg-white rounded-xl shadow-sm border transition-all ${
-                  isEditing ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-gray-100'
-                }`}
-              >
-                {isEditing ? (
-                  <div className="flex items-center gap-2 px-4 py-3">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                    <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      inputMode="numeric"
-                      value={displayValue(editingValue)}
-                      onChange={e => setEditingValue(e.target.value.replace(/\D/g, ''))}
-                      onKeyDown={e => handleKeyDown(e, cat.id)}
-                      placeholder="0"
-                      className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                    />
-                    <button
-                      onClick={() => saveInlineEdit(cat.id)}
-                      disabled={saving}
-                      className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                    >
-                      <Check size={15} />
-                    </button>
-                    <button
-                      onClick={cancelInlineEdit}
-                      className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => startInlineEdit(cat)}
-                    className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-gray-50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5">
-                      {current ? (
-                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                          {fmt(current)}
-                          <Pencil size={12} className="text-gray-300" />
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-300">Tocar para agregar</span>
-                      )}
-                      <Variation current={current} prev={prev} />
-                    </div>
-                  </button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

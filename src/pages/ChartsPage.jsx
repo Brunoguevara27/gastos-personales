@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { ChartsSkeleton } from '../components/Skeleton'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -44,11 +45,7 @@ export default function ChartsPage() {
     fetch()
   }, [user.id])
 
-  if (loading) return (
-    <div className="flex justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-    </div>
-  )
+  if (loading) return <ChartsSkeleton />
 
   const monthKeys = [...new Set(allExpenses.map(e => `${e.year}-${String(e.month).padStart(2, '0')}`))]
     .sort()

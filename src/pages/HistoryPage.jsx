@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { HistorySkeleton } from '../components/Skeleton'
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -55,11 +56,7 @@ export default function HistoryPage() {
       .filter(e => e.year === year && e.month === month)
       .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
 
-  if (loading) return (
-    <div className="flex justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-    </div>
-  )
+  if (loading) return <HistorySkeleton />
 
   if (monthKeys.length === 0) return (
     <div className="text-center py-20 text-gray-400 px-4">
@@ -83,8 +80,8 @@ export default function HistoryPage() {
             .sort((a, b) => (getAmount(y, m, b.id) ?? 0) - (getAmount(y, m, a.id) ?? 0))
           return (
             <div key={key} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                <span className="font-bold text-gray-800">{MONTHS[m - 1]} {y}</span>
+              <div className="flex items-center justify-between px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+                <span className="font-bold text-indigo-900">{MONTHS[m - 1]} {y}</span>
                 <span className="font-bold text-indigo-600">{fmt(total)}</span>
               </div>
               <div className="px-4 py-2 divide-y divide-gray-50">
