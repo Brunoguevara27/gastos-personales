@@ -89,7 +89,6 @@ export default function ChartsPage() {
     .filter(d => d.value > 0)
 
   const totals = lineData.map(d => d.total)
-  const avg = totals.reduce((a, b) => a + b, 0) / totals.length
   const maxVal = Math.max(...totals)
   const minVal = Math.min(...totals)
   const maxMonth = lineData[totals.indexOf(maxVal)]?.name
@@ -100,20 +99,16 @@ export default function ChartsPage() {
       <h2 className="text-lg font-bold text-gray-900">Gráficos</h2>
 
       {/* Stats summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
-          <p className="text-xs text-gray-400 mb-1">Promedio</p>
-          <p className="font-bold text-gray-800 text-sm">{fmtShort(avg)}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+          <p className="text-xs text-gray-400 mb-2">Mes más caro</p>
+          <p className="font-bold text-gray-800 text-base">{maxMonth}</p>
+          <p className="font-bold text-red-500 text-sm mt-0.5">{fmtShort(maxVal)}</p>
         </div>
-        <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
-          <p className="text-xs text-gray-400 mb-1">Máximo</p>
-          <p className="font-bold text-red-500 text-sm">{fmtShort(maxVal)}</p>
-          <p className="text-xs text-gray-300">{maxMonth}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
-          <p className="text-xs text-gray-400 mb-1">Mínimo</p>
-          <p className="font-bold text-green-500 text-sm">{fmtShort(minVal)}</p>
-          <p className="text-xs text-gray-300">{minMonth}</p>
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
+          <p className="text-xs text-gray-400 mb-2">Mes más barato</p>
+          <p className="font-bold text-gray-800 text-base">{minMonth}</p>
+          <p className="font-bold text-green-500 text-sm mt-0.5">{fmtShort(minVal)}</p>
         </div>
       </div>
 
