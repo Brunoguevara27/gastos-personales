@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, Trash2, Pencil, Check, X } from 'lucide-react'
+import { Plus, Trash2, Pencil } from 'lucide-react'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -9,9 +9,10 @@ const PRESET_COLORS = [
   '#10b981', '#6366f1',
 ]
 
-function CategoryForm({ title, initialName = '', initialColor = '#6366f1', saving, error, onSave, onCancel }) {
+function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initialVariable = false, saving, error, onSave, onCancel }) {
   const [name, setName] = useState(initialName)
   const [color, setColor] = useState(initialColor)
+  const [isVariable, setIsVariable] = useState(initialVariable)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -25,8 +26,8 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', savin
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && onSave(name, color)}
-          placeholder="Nombre (ej: Teléfono)"
+          onKeyDown={e => e.key === 'Enter' && onSave(name, color, isVariable)}
+          placeholder="Nombre (ej: Supermercado)"
           className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           maxLength={30}
         />
@@ -43,6 +44,30 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', savin
             ))}
           </div>
         </div>
+
+        {/* Variable toggle */}
+        <button
+          type="button"
+          onClick={() => setIsVariable(v => !v)}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+            isVariable
+              ? 'border-indigo-300 bg-indigo-50'
+              : 'border-gray-200 bg-gray-50'
+          }`}
+        >
+          <div className="text-left">
+            <p className={`text-sm font-medium ${isVariable ? 'text-indigo-700' : 'text-gray-600'}`}>
+              Gasto variable
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {isVariable ? 'Podés sumar montos durante el mes' : 'Se ingresa un monto fijo por mes'}
+            </p>
+          </div>
+          <div className={`w-10 h-6 rounded-full transition-colors flex-shrink-0 ${isVariable ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow mt-1 transition-all ${isVariable ? 'ml-5' : 'ml-1'}`} />
+          </div>
+        </button>
+
         {error && <p className="text-red-600 text-xs">{error}</p>}
         <div className="flex gap-2">
           <button
@@ -52,7 +77,7 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', savin
             Cancelar
           </button>
           <button
-            onClick={() => onSave(name, color)}
+            onClick={() => onSave(name, color, isVariable)}
             disabled={saving || !name.trim()}
             className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
@@ -86,7 +111,7 @@ export default function CategoriesPage() {
 
   useEffect(() => { fetchCategories() }, [user.id])
 
-  const addCategory = async (name, color) => {
+  const addCategory = async (name, color, isVariable) => {
     if (!name.trim()) return
     setSaving(true)
     setError('')
@@ -95,6 +120,7 @@ export default function CategoriesPage() {
       name: name.trim(),
       color,
       is_default: false,
+      is_variable: isVariable,
     })
     setSaving(false)
     if (error) {
@@ -105,13 +131,13 @@ export default function CategoriesPage() {
     }
   }
 
-  const editCategory = async (name, color) => {
+  const editCategory = async (name, color, isVariable) => {
     if (!name.trim()) return
     setSaving(true)
     setError('')
     const { error } = await supabase
       .from('categories')
-      .update({ name: name.trim(), color })
+      .update({ name: name.trim(), color, is_variable: isVariable })
       .eq('id', editingId)
     setSaving(false)
     if (error) {
@@ -179,6 +205,7 @@ export default function CategoriesPage() {
                 title={`Editar — ${cat.name}`}
                 initialName={cat.name}
                 initialColor={cat.color}
+                initialVariable={cat.is_variable || false}
                 saving={saving}
                 error={error}
                 onSave={editCategory}
@@ -188,7 +215,12 @@ export default function CategoriesPage() {
               <div className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                  <div>
+                    <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                    {cat.is_variable && (
+                      <span className="ml-2 text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">variable</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <button

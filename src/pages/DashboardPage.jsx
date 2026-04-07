@@ -67,7 +67,10 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false)
   const [savedCatId, setSavedCatId] = useState(null)
   const [visible, setVisible] = useState(true)
+  const [addingCatId, setAddingCatId] = useState(null)
+  const [addingValue, setAddingValue] = useState('')
   const inputRef = useRef(null)
+  const addInputRef = useRef(null)
   const touchStartX = useRef(null)
 
   const fetchData = useCallback(async (opts = {}) => {
@@ -195,6 +198,49 @@ export default function DashboardPage() {
     if (e.key === 'Escape') cancelInlineEdit()
   }
 
+  const startAdding = (e, cat) => {
+    e.stopPropagation()
+    if (saving) return
+    setEditingCatId(null)
+    setAddingCatId(cat.id)
+    setAddingValue('')
+    setTimeout(() => addInputRef.current?.focus(), 10)
+  }
+
+  const cancelAdding = () => {
+    setAddingCatId(null)
+    setAddingValue('')
+  }
+
+  const saveAdding = async (catId) => {
+    const digits = addingValue.replace(/\D/g, '')
+    if (!digits || parseInt(digits, 10) === 0) { cancelAdding(); return }
+    setSaving(true)
+    const toAdd = parseFloat(digits)
+    const existing = expenses[catId] || 0
+    const newAmount = existing + toAdd
+
+    // Optimistic update
+    setAddingCatId(null)
+    setAddingValue('')
+    setExpenses(prev => ({ ...prev, [catId]: newAmount }))
+    setSavedCatId(catId)
+    setTimeout(() => setSavedCatId(null), 1000)
+
+    await supabase.from('expenses').upsert(
+      [{ user_id: user.id, year, month, category_id: catId, amount: newAmount, updated_at: new Date().toISOString() }],
+      { onConflict: 'user_id,year,month,category_id' }
+    )
+
+    setSaving(false)
+    fetchData({ silent: true })
+  }
+
+  const handleAddKeyDown = (e, catId) => {
+    if (e.key === 'Enter') saveAdding(catId)
+    if (e.key === 'Escape') cancelAdding()
+  }
+
   const total = Object.values(expenses).reduce((sum, v) => sum + (v || 0), 0)
   const prevTotal = Object.values(prevExpenses).reduce((sum, v) => sum + (v || 0), 0)
   const hasData = total > 0
@@ -270,6 +316,7 @@ export default function DashboardPage() {
               })
               .map(cat => {
               const isEditing = editingCatId === cat.id
+              const isAdding = addingCatId === cat.id
               const current = expenses[cat.id]
               const prev = prevExpenses[cat.id]
               const justSaved = savedCatId === cat.id
@@ -280,7 +327,7 @@ export default function DashboardPage() {
                   className={`bg-white rounded-xl shadow-sm border transition-all duration-300 ${
                     justSaved
                       ? 'border-green-300 ring-1 ring-green-200 bg-green-50'
-                      : isEditing
+                      : isEditing || isAdding
                       ? 'border-indigo-300 ring-1 ring-indigo-200'
                       : 'border-gray-100'
                   }`}
@@ -313,28 +360,67 @@ export default function DashboardPage() {
                         <X size={15} />
                       </button>
                     </div>
+                  ) : isAdding ? (
+                    <div className="flex items-center gap-2 px-4 py-3">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
+                      <span className="text-xs text-gray-400">+</span>
+                      <input
+                        ref={addInputRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={displayValue(addingValue)}
+                        onChange={e => setAddingValue(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={e => handleAddKeyDown(e, cat.id)}
+                        placeholder="0"
+                        className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                      />
+                      <button
+                        onClick={() => saveAdding(cat.id)}
+                        disabled={saving}
+                        className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Check size={15} />
+                      </button>
+                      <button
+                        onClick={cancelAdding}
+                        className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => startInlineEdit(cat)}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-gray-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                        <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                    <div className="flex items-center px-4 py-3 active:bg-gray-50">
+                      <div
+                        className="flex-1 flex items-center justify-between cursor-pointer"
+                        onClick={() => startInlineEdit(cat)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                          <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5 mr-2">
+                          {current ? (
+                            <span className={`text-sm font-semibold transition-colors duration-300 ${justSaved ? 'text-green-600' : 'text-gray-900'}`}>
+                              {fmt(current)}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-gray-300 border border-dashed border-gray-200 rounded-lg px-2 py-0.5">
+                              <Plus size={10} /> agregar
+                            </span>
+                          )}
+                          <Variation current={current} prev={prev} />
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        {current ? (
-                          <span className={`text-sm font-semibold transition-colors duration-300 ${justSaved ? 'text-green-600' : 'text-gray-900'}`}>
-                            {fmt(current)}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs text-gray-300 border border-dashed border-gray-200 rounded-lg px-2 py-0.5">
-                            <Plus size={10} /> agregar
-                          </span>
-                        )}
-                        <Variation current={current} prev={prev} />
-                      </div>
-                    </button>
+                      {cat.is_variable && (
+                        <button
+                          onClick={(e) => startAdding(e, cat)}
+                          className="p-1.5 rounded-lg bg-gray-100 hover:bg-indigo-100 text-gray-400 hover:text-indigo-600 transition-colors flex-shrink-0"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )
