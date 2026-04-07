@@ -64,13 +64,13 @@ export default function ChartsPage() {
     const total = allExpenses
       .filter(e => e.year === y && e.month === m)
       .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
-    return { name: `${MONTHS_SHORT[m - 1]} ${String(y).slice(2)}`, total }
+    return { name: `${MONTHS_SHORT[m - 1]} ${y}`, total }
   })
 
   // Stacked bar chart data (categories per month)
   const barData = monthKeys.map(key => {
     const [y, m] = key.split('-').map(Number)
-    const row = { name: `${MONTHS_SHORT[m - 1]} ${String(y).slice(2)}` }
+    const row = { name: `${MONTHS_SHORT[m - 1]} ${y}` }
     categories.forEach(cat => {
       const exp = allExpenses.find(e => e.year === y && e.month === m && e.category_id === cat.id)
       row[cat.name] = exp ? parseFloat(exp.amount) : 0
