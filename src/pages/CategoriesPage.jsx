@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { Plus, Trash2, Pencil } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check } from 'lucide-react'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e',
@@ -18,7 +18,7 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initi
   useEffect(() => { inputRef.current?.focus() }, [])
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-200 mb-4">
+    <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-200 mb-3">
       <h3 className="font-semibold text-gray-700 mb-4 text-sm">{title}</h3>
       <div className="space-y-4">
         <input
@@ -31,16 +31,20 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initi
           className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           maxLength={30}
         />
+
+        {/* Color picker */}
         <div>
-          <p className="text-xs text-gray-500 mb-2">Color</p>
-          <div className="flex flex-wrap gap-2.5">
+          <p className="text-xs text-gray-500 mb-2.5">Color</p>
+          <div className="flex flex-wrap gap-3">
             {PRESET_COLORS.map(c => (
               <button
                 key={c}
                 onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-full transition-all ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-110'}`}
-                style={{ backgroundColor: c }}
-              />
+                className="w-9 h-9 rounded-full transition-all hover:scale-110 flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: c, boxShadow: color === c ? `0 0 0 3px white, 0 0 0 5px ${c}` : 'none' }}
+              >
+                {color === c && <Check size={14} color="white" strokeWidth={3} />}
+              </button>
             ))}
           </div>
         </div>
@@ -53,9 +57,7 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initi
               type="button"
               onClick={() => setIsVariable(false)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                !isVariable
-                  ? 'bg-white text-gray-800 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600'
+                !isVariable ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               Fijo
@@ -64,9 +66,7 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initi
               type="button"
               onClick={() => setIsVariable(true)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                isVariable
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600'
+                isVariable ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               Variable
@@ -98,6 +98,74 @@ function CategoryForm({ title, initialName = '', initialColor = '#6366f1', initi
   )
 }
 
+function CategorySection({ title, cats, savedId, deletingId, confirmDeleteId, onEdit, onDelete, onConfirmDelete, onCancelDelete }) {
+  if (cats.length === 0) return null
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">{title}</p>
+      <div className="space-y-2">
+        {cats.map(cat => (
+          <div
+            key={cat.id}
+            className={`bg-white rounded-xl px-4 py-3.5 shadow-sm border transition-all duration-300 ${
+              savedId === cat.id ? 'border-green-300 ring-1 ring-green-200 bg-green-50'
+              : confirmDeleteId === cat.id ? 'border-red-200 bg-red-50'
+              : 'border-gray-100'
+            }`}
+          >
+            {confirmDeleteId === cat.id ? (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-red-600 font-medium">¿Eliminar "{cat.name}"?</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onCancelDelete}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => onDelete(cat)}
+                    disabled={deletingId === cat.id}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
+                  >
+                    {deletingId === cat.id ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className={`font-medium text-sm transition-colors duration-300 ${savedId === cat.id ? 'text-green-700' : 'text-gray-700'}`}>
+                    {cat.name}
+                  </span>
+                  {cat.is_variable && (
+                    <span className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">variable</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => onEdit(cat)}
+                    className="p-1.5 text-gray-400 hover:text-indigo-500 transition-colors"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => onConfirmDelete(cat.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function CategoriesPage() {
   const { user } = useAuth()
   const [categories, setCategories] = useState([])
@@ -105,8 +173,10 @@ export default function CategoriesPage() {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState(null)
   const [error, setError] = useState('')
-  const [deleting, setDeleting] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   const fetchCategories = async () => {
     const { data } = await supabase
@@ -119,6 +189,11 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => { fetchCategories() }, [user.id])
+
+  const flashSaved = (id) => {
+    setSavedId(id)
+    setTimeout(() => setSavedId(null), 1500)
+  }
 
   const addCategory = async (name, color, isVariable) => {
     if (!name.trim()) return
@@ -136,7 +211,7 @@ export default function CategoriesPage() {
       setError('No se pudo guardar la categoría.')
     } else {
       setAdding(false)
-      fetchCategories()
+      await fetchCategories()
     }
   }
 
@@ -152,29 +227,30 @@ export default function CategoriesPage() {
     if (error) {
       setError('No se pudo guardar.')
     } else {
+      const id = editingId
       setEditingId(null)
-      fetchCategories()
+      await fetchCategories()
+      flashSaved(id)
     }
   }
 
   const deleteCategory = async (cat) => {
-    if (!window.confirm(`¿Eliminar "${cat.name}"? Se borrarán todos los gastos asociados.`)) return
-    setDeleting(cat.id)
+    setDeletingId(cat.id)
     await supabase.from('categories').delete().eq('id', cat.id)
-    setDeleting(null)
+    setDeletingId(null)
+    setConfirmDeleteId(null)
     fetchCategories()
   }
 
   const startEdit = (cat) => {
     setAdding(false)
+    setConfirmDeleteId(null)
     setError('')
     setEditingId(cat.id)
   }
 
-  const cancelEdit = () => {
-    setEditingId(null)
-    setError('')
-  }
+  const fixed = categories.filter(c => !c.is_variable)
+  const variable = categories.filter(c => c.is_variable)
 
   if (loading) return (
     <div className="flex justify-center py-12">
@@ -183,12 +259,13 @@ export default function CategoriesPage() {
   )
 
   return (
-    <div className="max-w-lg mx-auto px-4 pt-4">
-      <div className="flex items-center justify-between mb-5">
+    <div className="max-w-lg mx-auto px-4 pt-4 pb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-bold text-gray-900">Categorías</h2>
         {!adding && !editingId && (
           <button
-            onClick={() => setAdding(true)}
+            onClick={() => { setAdding(true); setConfirmDeleteId(null) }}
             className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
           >
             <Plus size={16} /> Nueva
@@ -196,6 +273,16 @@ export default function CategoriesPage() {
         )}
       </div>
 
+      {/* Summary */}
+      {categories.length > 0 && (
+        <p className="text-xs text-gray-400 mb-5 px-0.5">
+          {fixed.length > 0 && `${fixed.length} fija${fixed.length !== 1 ? 's' : ''}`}
+          {fixed.length > 0 && variable.length > 0 && ' · '}
+          {variable.length > 0 && `${variable.length} variable${variable.length !== 1 ? 's' : ''}`}
+        </p>
+      )}
+
+      {/* New category form */}
       {adding && (
         <CategoryForm
           title="Nueva categoría"
@@ -206,53 +293,50 @@ export default function CategoriesPage() {
         />
       )}
 
-      <div className="space-y-2">
-        {categories.map(cat => (
-          <div key={cat.id}>
-            {editingId === cat.id ? (
-              <CategoryForm
-                title={`Editar — ${cat.name}`}
-                initialName={cat.name}
-                initialColor={cat.color}
-                initialVariable={cat.is_variable || false}
-                saving={saving}
-                error={error}
-                onSave={editCategory}
-                onCancel={cancelEdit}
-              />
-            ) : (
-              <div className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <div>
-                    <span className="font-medium text-gray-700 text-sm">{cat.name}</span>
-                    {cat.is_variable && (
-                      <span className="ml-2 text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">variable</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => startEdit(cat)}
-                    className="p-1.5 text-gray-400 hover:text-indigo-500 transition-colors"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => deleteCategory(cat)}
-                    disabled={deleting === cat.id}
-                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+      {/* Edit form (shown above the list) */}
+      {editingId && (() => {
+        const cat = categories.find(c => c.id === editingId)
+        return cat ? (
+          <CategoryForm
+            title={`Editar — ${cat.name}`}
+            initialName={cat.name}
+            initialColor={cat.color}
+            initialVariable={cat.is_variable || false}
+            saving={saving}
+            error={error}
+            onSave={editCategory}
+            onCancel={() => { setEditingId(null); setError('') }}
+          />
+        ) : null
+      })()}
+
+      {/* Grouped list */}
+      <div className="space-y-5">
+        <CategorySection
+          title="Fijas"
+          cats={fixed}
+          savedId={savedId}
+          deletingId={deletingId}
+          confirmDeleteId={confirmDeleteId}
+          onEdit={startEdit}
+          onDelete={deleteCategory}
+          onConfirmDelete={(id) => { setConfirmDeleteId(id); setEditingId(null) }}
+          onCancelDelete={() => setConfirmDeleteId(null)}
+        />
+        <CategorySection
+          title="Variables"
+          cats={variable}
+          savedId={savedId}
+          deletingId={deletingId}
+          confirmDeleteId={confirmDeleteId}
+          onEdit={startEdit}
+          onDelete={deleteCategory}
+          onConfirmDelete={(id) => { setConfirmDeleteId(id); setEditingId(null) }}
+          onCancelDelete={() => setConfirmDeleteId(null)}
+        />
       </div>
 
-      {categories.length === 0 && (
+      {categories.length === 0 && !adding && (
         <p className="text-center text-gray-400 text-sm py-8">
           No hay categorías. Creá la primera usando el botón Nueva.
         </p>

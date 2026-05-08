@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, ChevronRight, Check, X, TrendingUp, TrendingDown, Minus, Plus, CheckCircle2, Circle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Check, X, TrendingUp, TrendingDown, Minus, Plus, CheckCircle2, Circle } from 'lucide-react'
 import { DashboardSkeleton } from '../components/Skeleton'
 import BottomSheet from '../components/BottomSheet'
 
@@ -44,6 +44,62 @@ function Variation({ current, prev }) {
   )
 }
 
+function FixedRow({ cat, expenses, prevExpenses, editingCatId, editingValue, setEditingValue, savedCatId, saving, inputRef, onEdit, onSave, onCancel, onKeyDown }) {
+  const isEditing = editingCatId === cat.id
+  const current = expenses[cat.id]
+  const prev = prevExpenses[cat.id]
+  const justSaved = savedCatId === cat.id
+  const isPaid = !!current
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border transition-all duration-300 ${
+      justSaved ? 'border-green-300 ring-1 ring-green-200 bg-green-50'
+      : isEditing ? 'border-indigo-300 ring-1 ring-indigo-200'
+      : 'border-gray-100'
+    }`}>
+      {isEditing ? (
+        <div className="flex items-center gap-2 px-4 py-3">
+          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+          <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
+          <input
+            ref={inputRef}
+            type="text" inputMode="numeric"
+            value={editingValue ? parseInt(editingValue, 10).toLocaleString('es-AR') : ''}
+            onChange={e => setEditingValue(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={e => onKeyDown(e, cat.id)}
+            placeholder="0"
+            className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+          />
+          <button onClick={() => onSave(cat.id)} disabled={saving}
+            className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            <Check size={15} />
+          </button>
+          <button onClick={onCancel}
+            className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center px-4 py-3 cursor-pointer active:bg-gray-50 rounded-xl"
+          onClick={() => onEdit(cat)}>
+          {isPaid
+            ? <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mr-3" />
+            : <Circle size={18} className="text-amber-400 flex-shrink-0 mr-3" />
+          }
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mr-2" style={{ backgroundColor: cat.color }} />
+          <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
+          <div className="flex flex-col items-end gap-0.5">
+            {current
+              ? <span className={`text-sm font-semibold transition-colors duration-300 ${justSaved ? 'text-green-600' : 'text-gray-900'}`}>{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(current)}</span>
+              : <span className="text-xs text-amber-500 font-medium">Sin pagar</span>
+            }
+            <Variation current={current} prev={prev} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const now = new Date()
@@ -61,6 +117,7 @@ export default function DashboardPage() {
   const [savedCatId, setSavedCatId] = useState(null)
   const [visible, setVisible] = useState(true)
   const [sheetCat, setSheetCat] = useState(null)
+  const [paidOpen, setPaidOpen] = useState(false)
   const inputRef = useRef(null)
   const touchStartX = useRef(null)
 
@@ -279,63 +336,30 @@ export default function DashboardPage() {
                 : <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full animate-pulse">✓ todos pagados</span>
               }
             </div>
+
+            {/* Pending rows */}
             <div className="space-y-2">
-              {fixed.map(cat => {
-                const isEditing = editingCatId === cat.id
-                const current = expenses[cat.id]
-                const prev = prevExpenses[cat.id]
-                const justSaved = savedCatId === cat.id
-                const isPaid = !!current
-                return (
-                  <div key={cat.id} className={`bg-white rounded-xl shadow-sm border transition-all duration-300 ${
-                    justSaved ? 'border-green-300 ring-1 ring-green-200 bg-green-50'
-                    : isEditing ? 'border-indigo-300 ring-1 ring-indigo-200'
-                    : 'border-gray-100'
-                  }`}>
-                    {isEditing ? (
-                      <div className="flex items-center gap-2 px-4 py-3">
-                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                        <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
-                        <input
-                          ref={inputRef}
-                          type="text" inputMode="numeric"
-                          value={displayValue(editingValue)}
-                          onChange={e => setEditingValue(e.target.value.replace(/\D/g, ''))}
-                          onKeyDown={e => handleKeyDown(e, cat.id)}
-                          placeholder="0"
-                          className="w-28 text-right px-2 py-1 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                        />
-                        <button onClick={() => saveInlineEdit(cat.id)} disabled={saving}
-                          className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                          <Check size={15} />
-                        </button>
-                        <button onClick={cancelInlineEdit}
-                          className="p-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors">
-                          <X size={15} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center px-4 py-3 cursor-pointer active:bg-gray-50 rounded-xl"
-                        onClick={() => startInlineEdit(cat)}>
-                        {isPaid
-                          ? <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mr-3" />
-                          : <Circle size={18} className="text-amber-400 flex-shrink-0 mr-3" />
-                        }
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mr-2" style={{ backgroundColor: cat.color }} />
-                        <span className="font-medium text-gray-700 text-sm flex-1">{cat.name}</span>
-                        <div className="flex flex-col items-end gap-0.5">
-                          {current
-                            ? <span className={`text-sm font-semibold transition-colors duration-300 ${justSaved ? 'text-green-600' : 'text-gray-900'}`}>{fmt(current)}</span>
-                            : <span className="text-xs text-amber-500 font-medium">Sin pagar</span>
-                          }
-                          <Variation current={current} prev={prev} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {fixedPending.map(cat => <FixedRow key={cat.id} cat={cat} expenses={expenses} prevExpenses={prevExpenses} editingCatId={editingCatId} editingValue={editingValue} setEditingValue={setEditingValue} savedCatId={savedCatId} saving={saving} inputRef={inputRef} onEdit={startInlineEdit} onSave={saveInlineEdit} onCancel={cancelInlineEdit} onKeyDown={handleKeyDown} />)}
             </div>
+
+            {/* Paid collapsible section */}
+            {fixedPaid.length > 0 && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setPaidOpen(o => !o)}
+                  className="flex items-center gap-1.5 w-full px-1 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <ChevronDown size={13} className={`transition-transform duration-200 ${paidOpen ? 'rotate-180' : ''}`} />
+                  <span className="font-medium">{paidOpen ? 'Ocultar' : 'Ver'} pagados ({fixedPaid.length})</span>
+                  {!paidOpen && <span className="ml-auto font-semibold text-gray-500">{fmt(fixedPaid.reduce((s, c) => s + (expenses[c.id] || 0), 0))}</span>}
+                </button>
+                {paidOpen && (
+                  <div className="space-y-2 mt-1">
+                    {fixedPaid.map(cat => <FixedRow key={cat.id} cat={cat} expenses={expenses} prevExpenses={prevExpenses} editingCatId={editingCatId} editingValue={editingValue} setEditingValue={setEditingValue} savedCatId={savedCatId} saving={saving} inputRef={inputRef} onEdit={startInlineEdit} onSave={saveInlineEdit} onCancel={cancelInlineEdit} onKeyDown={handleKeyDown} />)}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
